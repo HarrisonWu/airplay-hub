@@ -13,14 +13,24 @@ Type=simple
 WorkingDirectory=/opt/cdplayer
 ExecStart=/usr/bin/python3 -m airplay_hub
 
-# Playback and ripping are done through MPD and the audio group.
-User=mpd
+# The audio server is per user. PipeWire and PulseAudio both publish a socket at
+# /run/user/<uid>/pulse/native, mode 0700, so only that one account can reach it.
+# MPD, shairport-sync and this service all play into the same graph, so all three
+# must run as the account that owns the audio server -- normally the human
+# account, not a system account.
+#
+# User= and XDG_RUNTIME_DIR below are one setting in two halves and must be
+# edited together: XDG_RUNTIME_DIR has to be /run/user/<uid of User=>. The units
+# below are one working pair for a stock Raspberry Pi OS image, where the account
+# created during imaging is uid 1000.
+User=1000
 Group=audio
 SupplementaryGroups=audio
-
-# PulseAudio's socket lives in this user's runtime directory; without it the
-# process can play through MPD but cannot enumerate or switch sinks.
-Environment=XDG_RUNTIME_DIR=/run/user/%U
+# Written numerically because systemd does not expand %U to the User= value in a
+# system unit -- it resolves specifiers against the service manager's own user,
+# so /run/user/%U arrives as /run/user/0. libpulse then cannot connect, and every
+# output switch fails with the misleading "no wired output is available".
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PYTHONUNBUFFERED=1
 
 # Seconds subtracted from the reported AirPlay position. Raise it for a
@@ -28,6 +38,9 @@ Environment=PYTHONUNBUFFERED=1
 Environment=AIRPLAY_HUB_AP_LATENCY=0.05
 # Parent directory of the meta/ disc metadata cache.
 Environment=AIRPLAY_HUB_DATA_DIR=/opt/cdplayer
+# Only needed when the install renames its wired sink; the default is to use the
+# first non-Bluetooth sink.
+#Environment=AIRPLAY_HUB_WIRED_SINK=output_wired
 
 Restart=on-failure
 RestartSec=3
@@ -36,9 +49,13 @@ RestartSec=3
 # library. Both stay inside the two paths below; everything else is read-only.
 # PrivateTmp is deliberately NOT enabled: shairport-sync creates its metadata
 # pipe at /tmp/shairport-sync-metadata, and a private /tmp would hide it.
+# ProtectHome is read-only rather than yes: "yes" replaces /home, /root and
+# /run/user with empty inaccessible directories, which hides the audio socket
+# this unit exists to talk to. ReadWritePaths= does not undo that. "read-only"
+# keeps /home closed to writes without taking /run/user away.
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=yes
+ProtectHome=read-only
 ReadWritePaths=/opt/cdplayer /var/lib/mpd/music
 
 [Install]

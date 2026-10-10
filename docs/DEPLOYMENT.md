@@ -11,16 +11,19 @@ build step, no virtualenv and no third-party dependency — only the device's
 | `/var/lib/mpd/music` | the music library, owned by MPD |
 | `$AIRPLAY_HUB_DATA_DIR/meta` | the metadata cache, disposable |
 
+`/opt/cdplayer` must be writable by the account in the unit's `User=`, which
+also owns the metadata cache.
+
 ## Fresh install
 
 ```sh
 git clone https://github.com/HarrisonWu/airplay-hub.git
 cd airplay-hub
 
-sudo install -d -o mpd -g audio /opt/cdplayer
-sudo install -d -o mpd -g audio /opt/cdplayer/meta
+sudo install -d -o 1000 -g audio /opt/cdplayer
+sudo install -d -o 1000 -g audio /opt/cdplayer/meta
 sudo cp -r src/airplay_hub /opt/cdplayer/
-sudo chown -R mpd:audio /opt/cdplayer/airplay_hub
+sudo chown -R 1000:audio /opt/cdplayer/airplay_hub
 
 sudo cp deploy/airplay-hub.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -37,6 +40,51 @@ curl -s http://127.0.0.1:8080/api/status
 
 `/api/status` answering with JSON means the process is serving; the UI is at
 `http://<host>:8080/`.
+
+## The audio server account
+
+This is the one thing that reliably goes wrong on a fresh install, so it is
+worth reading before the first `systemctl start`.
+
+MPD, shairport-sync and this service all play into one audio graph, and a PipeWire
+or PulseAudio server is **per user**: it publishes its socket at
+`/run/user/<uid>/pulse/native` with mode 0700, so only the account that owns the
+server can open it. Three settings therefore have to name the same account and
+have to be changed together:
+
+| Setting | Value |
+| --- | --- |
+| `User=` | the account that owns the audio server — normally the human account, not a system account; on a stock Raspberry Pi OS image the account created during imaging is uid 1000 |
+| `Group=` | a group that account belongs to — `audio` exists on every audio-capable Linux |
+| `Environment=XDG_RUNTIME_DIR=` | `/run/user/<uid of User=>`, written **numerically** |
+
+Two systemd behaviours make this easy to get wrong. Both were verified against
+the systemd on Raspberry Pi OS:
+
+- **`XDG_RUNTIME_DIR=/run/user/%U` does not work.** For a system unit, `%U`
+  resolves against the service manager's own user rather than against `User=`, so
+  the value arrives as `/run/user/0`. Nothing warns; `pactl` simply cannot
+  connect. This is why the unit spells the UID out.
+- **`ProtectHome=yes` breaks it as well.** That setting replaces `/home`, `/root`
+  and `/run/user` with empty inaccessible directories, so the audio socket
+  disappears even when `XDG_RUNTIME_DIR` is correct. `ProtectHome=read-only` is
+  the strongest setting that still leaves `/run/user` alone, and
+  `ReadWritePaths=` does **not** undo `ProtectHome=yes`.
+
+`XDG_RUNTIME_DIR` cannot simply be omitted: libpulse does not fall back to
+`/run/user/<uid>` when it is unset.
+
+When either is wrong, every output switch answers `no wired output is available`
+whatever the real cause. The application probes the audio server once at startup
+and logs the underlying reason, so check there first:
+
+```sh
+journalctl -u airplay-hub.service | grep -i 'audio server'
+```
+
+MPD's own account is a separate question: `mpd.conf` has a `user` directive that
+dictates which account the MPD process drops to, and MPD reaches the audio server
+as that account. Set it to the same account as `User=` above.
 
 ## Upgrade
 

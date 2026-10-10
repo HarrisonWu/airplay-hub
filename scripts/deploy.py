@@ -22,6 +22,11 @@ FILES = tuple('airplay_hub/' + name for name in (
     '__init__.py', '__main__.py', 'templates/index.html'))
 TARGET = Path('/opt/cdplayer')
 SERVICE = 'airplay-hub.service'
+# The account the appliance runs as. It has to be the account that owns the audio
+# server, because that server's socket is per user, so it is the same account as
+# User= in deploy/airplay-hub.service. Keep the two in step: the unit names it
+# and this script installs the bundle with its ownership.
+ACCOUNT, GROUP = '1000', 'audio'
 
 
 def digest(path):
@@ -136,8 +141,9 @@ def deploy(source, backup, baseline, apply=False):
         return {'dry_run': True, 'files': list(FILES), 'baseline_matches': True, 'idle': True}
     import pwd
     import grp
-    new_attributes = {'uid': pwd.getpwnam('mpd').pw_uid,
-                      'gid': grp.getgrnam('audio').gr_gid, 'mode': 0o644}
+    account = pwd.getpwuid(int(ACCOUNT)) if ACCOUNT.isdigit() else pwd.getpwnam(ACCOUNT)
+    new_attributes = {'uid': account.pw_uid,
+                      'gid': grp.getgrnam(GROUP).gr_gid, 'mode': 0o644}
     before = data_manifest()
     attributes = save_backup(TARGET, backup, baseline)
     (backup / 'data-before.json').write_text(json.dumps(before, ensure_ascii=False))
@@ -154,7 +160,7 @@ def deploy(source, backup, baseline, apply=False):
     try:
         for name, data in bundle.items():
             write_atomic(TARGET / name, data, attributes.get(name, new_attributes))
-        imported = run('runuser', '-u', 'mpd', '--', '/usr/bin/python3', '-c',
+        imported = run('runuser', '-u', ACCOUNT, '--', '/usr/bin/python3', '-c',
                        "import sys; sys.path.insert(0, '/opt/cdplayer'); import airplay_hub.webapp; "
                        "print('service-user import OK', len(airplay_hub.webapp.PAGE), airplay_hub.webapp._AP_LAT)")
         run('systemctl', 'start', SERVICE)

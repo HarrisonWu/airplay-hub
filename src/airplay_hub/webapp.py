@@ -52,7 +52,11 @@ BT_PROFILE_KBPS = {
     "a2dp-sink-aptx_ll": 352, "a2dp-sink-ldac": 990,
     "a2dp-sink-faststream": 264,
 }
-WIRED_SINK = "output_wired"
+# The sink that counts as the wired output. PulseAudio and PipeWire name sinks
+# after the attached hardware (alsa_output.usb-...), so this cannot be a
+# constant. AIRPLAY_HUB_WIRED_SINK overrides the name for installs that define
+# their own; otherwise the first non-Bluetooth sink is used.
+WIRED_SINK = os.environ.get("AIRPLAY_HUB_WIRED_SINK", "").strip() or None
 _link_cache = {"t": 0.0, "v": None}
 _link_lock = threading.Lock()
 
@@ -600,13 +604,16 @@ def probe_audio_link(max_age=2.0):
                     for c in json.loads(out3):
                         if (c.get("name") or "").startswith("bluez_card"):
                             props = c.get("properties") or {}
-                            bt_codec = props.get("bluetooth.codec")
+                            # PulseAudio exposes bluetooth.codec; PipeWire, which
+                            # answers the same protocol, uses api.bluez5.codec
+                            bt_codec = (props.get("bluetooth.codec")
+                                        or props.get("api.bluez5.codec"))
                             prof = c.get("active_profile") or prof
                             break
                 except Exception:
                     pass
-            # the PulseAudio bluetooth.codec property (sbc / sbc_xq / aptx_hd / ldac)
-            # tracks the negotiated codec more closely than active_profile does
+            # the negotiated codec property (sbc / sbc_xq / aptx_hd / ldac) tracks
+            # the codec more closely than active_profile does
             ck = ("a2dp-sink-" + bt_codec.replace("-", "_")) if bt_codec else None
             if ck and ck in BT_PROFILE_NAME:
                 res["codec"] = BT_PROFILE_NAME[ck]
@@ -626,6 +633,47 @@ def probe_audio_link(max_age=2.0):
     with _link_lock:
         _link_cache.update(t=time.time(), v=res)
     return res
+
+
+def wired_sink():
+    """Name of the sink to switch back to when leaving Bluetooth.
+
+    Returns the configured override when set, otherwise the first sink that is
+    not a Bluetooth one -- on a stock install that is the USB or I2S DAC. None
+    means no wired output is present, and callers must not switch to it.
+    """
+    if WIRED_SINK:
+        return WIRED_SINK
+    try:
+        rc, out = run(["pactl", "-f", "json", "list", "sinks"], timeout=6)
+        if rc == 0:
+            for sink in json.loads(out):
+                name = sink.get("name") or ""
+                if not name.startswith(("bluez_sink.", "bluez_output")):
+                    return name
+    except Exception:
+        logger.exception("Could not enumerate sinks")
+    return None
+
+
+def check_audio_server():
+    """Report whether the audio server is reachable, and name the cause if not.
+
+    A wrong XDG_RUNTIME_DIR, a unit running as an account that does not own the
+    audio server, and a systemd sandbox that hides /run/user all end the same
+    way: pactl cannot connect, so output switching answers "no wired output is
+    available" and the real cause stays invisible. One probe at startup turns
+    that into a line an operator can act on. Returns True when reachable.
+    """
+    rc, out = run(["pactl", "info"], timeout=6)
+    if rc == 0:
+        return True
+    logger.error(
+        "the audio server is unreachable: output switching and codec reporting "
+        "will not work. XDG_RUNTIME_DIR is %r; it must be /run/user/<uid of the "
+        "account this service runs as>. pactl said: %s",
+        os.environ.get("XDG_RUNTIME_DIR"), (out or "").strip()[:400])
+    return False
 
 
 def play_track_cd(n):
@@ -1235,7 +1283,9 @@ def bt_set_power(on):
     if not on:
         link = probe_audio_link(max_age=0)
         if link.get("mode") == "bt":
-            run(["pactl", "set-default-sink", WIRED_SINK], timeout=6)
+            target = wired_sink()
+            if target:
+                run(["pactl", "set-default-sink", target], timeout=6)
     rc, out = _btc_fast(["power", "on" if on else "off"])
     if rc != 0 or "succeeded" not in (out or ""):
         return 1, (out or "").strip()[:100] or "the Bluetooth power command failed"
@@ -1394,7 +1444,9 @@ def _bt_disconnect_worker(mac):
     try:
         link = probe_audio_link(max_age=0)
         if link.get("mode") == "bt":
-            run(["pactl", "set-default-sink", WIRED_SINK], timeout=6)
+            target = wired_sink()
+            if target:
+                run(["pactl", "set-default-sink", target], timeout=6)
         if _bt_wait_done(mac, False, ["disconnect", mac], timeout=15):
             ok, msg = True, "disconnected " + mac
         else:
@@ -1571,7 +1623,9 @@ def _do_action(data):
             target = link["bt_sinks"][0]
             name = "Bluetooth"
         elif to == "wired":
-            target = WIRED_SINK
+            target = wired_sink()
+            if not target:
+                return 1, "no wired output is available"
             name = "wired"
         else:
             return 1, "invalid switch_output argument; use to=wired or to=bt"
@@ -1726,6 +1780,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     """Serve the control UI and start the AirPlay metadata worker."""
     print("airplay-hub listening on http://%s:%d  (LIB=%s)" % (HOST, PORT, LIB), flush=True)
+    check_audio_server()
     threading.Thread(target=_ap_meta_worker, daemon=True).start()
     with PlayerHTTPServer((HOST, PORT), Handler) as server:
         try:

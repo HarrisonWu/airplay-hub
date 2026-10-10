@@ -107,12 +107,20 @@ disk, so art survives a sender that stops sending it.
 | --- | --- | --- |
 | `AIRPLAY_HUB_AP_LATENCY` | `0.05` | Seconds subtracted from the AirPlay progress estimate. |
 | `AIRPLAY_HUB_DATA_DIR` | `/opt/cdplayer` | Parent of the `meta/` metadata cache. |
+| `AIRPLAY_HUB_WIRED_SINK` | first non-Bluetooth sink | Sink to switch back to when leaving Bluetooth. |
 
 Paths that are not configurable are constants at the top of `webapp.py` and
 `cdmeta.py`: the optical drive (`/dev/sr0`), the MPD library
-(`/var/lib/mpd/music`), the wired sink name (`output_wired`), the AirPlay
-metadata pipe (`/tmp/shairport-sync-metadata`) and the listen address
-(`0.0.0.0:8080`, no authentication — see [DECISIONS](DECISIONS.md)).
+(`/var/lib/mpd/music`), the AirPlay metadata pipe
+(`/tmp/shairport-sync-metadata`) and the listen address (`0.0.0.0:8080`, no
+authentication — see [DECISIONS](DECISIONS.md)).
+
+The wired sink is deliberately not a constant. PulseAudio and PipeWire name
+sinks after the attached hardware (`alsa_output.usb-...`), so a hard-coded name
+only works on the machine it was written for; `AIRPLAY_HUB_WIRED_SINK` is an
+escape hatch for installs that rename their sink, and otherwise the first
+non-Bluetooth sink is used. If no wired sink exists, switching to it is refused
+rather than attempted.
 
 ## Operational notes
 

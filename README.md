@@ -77,6 +77,7 @@ Everything is optional; the defaults match a stock Orange Pi install.
 | --- | --- | --- |
 | `AIRPLAY_HUB_AP_LATENCY` | `0.05` | Seconds of AirPlay progress correction. |
 | `AIRPLAY_HUB_DATA_DIR` | `/opt/cdplayer` | Where the metadata cache lives. |
+| `AIRPLAY_HUB_WIRED_SINK` | first non-Bluetooth sink | Sink to switch back to when leaving Bluetooth. |
 
 ## Development
 
