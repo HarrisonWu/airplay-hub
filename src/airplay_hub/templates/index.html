@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AirPlay Hub</title>
+<style>
+  :root{--bg:#0d1117;--card:#161c26;--line:#232c3a;--fg:#e6edf3;
+        --mut:#8b98a9;--acc:#4d8dff;--ok:#1d9e75;--warn:#e3b341}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);font:14px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       min-height:100vh;display:flex;justify-content:center;padding:16px}
+  .wrap{width:100%;max-width:560px}
+  header{display:flex;align-items:baseline;gap:10px;padding:14px 4px 8px}
+  header h1{font-size:20px;font-weight:600;letter-spacing:.5px}
+  header .dot{width:9px;height:9px;border-radius:50%;background:var(--mut);display:inline-block}
+  header .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  header small{color:var(--mut)}
+  .tabs{display:flex;gap:8px;margin:8px 0}
+  .tab{flex:1;text-align:center;padding:9px;border-radius:10px;border:1px solid var(--line);
+       background:var(--card);color:var(--mut);cursor:pointer;font-size:15px;transition:.12s}
+  .tab:hover{color:#fff;background:#232c3a;border-color:#40516e}
+  .tab:active{transform:scale(.97)}
+  .tab.cur{color:#fff;border-color:var(--acc);background:#1b2a47}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:10px 0}
+  .now{display:flex;flex-direction:column;gap:10px}
+  .t1{display:flex;justify-content:space-between;align-items:center}
+  #state{font-weight:600}
+  #state.playing{color:var(--ok)} #state.paused{color:var(--warn)}
+  .trackname{font-size:17px;font-weight:600;color:#fff;max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trackname.off{color:var(--mut);font-weight:400;font-size:15px}
+  .apart{display:none;width:84px;height:84px;border-radius:12px;object-fit:cover;
+       margin:2px auto 10px;box-shadow:0 6px 18px rgba(0,0,0,.5);background:#0b0f15}
+  .apart.show{display:block}
+  .prog{position:relative;height:7px;background:#0b0f15;border-radius:6px;cursor:pointer;touch-action:none}
+  .prog>i{position:absolute;inset:0;width:0;background:var(--acc);border-radius:6px;transition:width .6s linear}
+  .prog.dragging>i{transition:none}
+  .prog .thumb{position:absolute;top:50%;left:0;width:13px;height:13px;border-radius:50%;background:#fff;
+       border:2px solid var(--acc);box-shadow:0 1px 4px rgba(0,0,0,.55);transform:translate(-50%,-50%);
+       opacity:0;transition:opacity .15s;pointer-events:none}
+  .prog:hover .thumb,.prog.dragging .thumb{opacity:1}
+  /* enlarge the hit area while dragging so finger/mouse can grab it */
+  .prog::before{content:"";position:absolute;inset:-9px 0}
+  .times{display:flex;justify-content:space-between;color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums}
+  .btns{display:flex;gap:10px;align-items:center}
+  .b{flex:1;padding:12px;border:1px solid var(--line);border-radius:10px;background:#1c2430;color:var(--fg);
+     font-size:15px;cursor:pointer;user-select:none;transition:.12s}
+  .b:hover{border-color:#40516e;background:#253049;color:#fff}
+  .b:active{transform:scale(.95);filter:brightness(1.3)}
+  .b.main{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+  .b.main:hover{background:#6ea7ff;border-color:#6ea7ff;color:#fff}
+  .b.pnav{flex:none;width:62px;font-size:17px;padding:12px 0;line-height:1}
+  .b.green{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:600}
+  .b.green:hover{background:#25b184;border-color:#25b184;color:#fff}
+  .b.gray{background:#232b38;color:var(--mut)}
+  .b:disabled{opacity:.5;cursor:not-allowed}
+  .b.ghost:hover{background:#243040}
+  .b.small{padding:8px 12px;font-size:13px;flex:none}
+  .modes{display:flex;gap:8px;margin:2px 0 6px}
+  .mode{flex:1;padding:8px 4px;border:1px solid var(--line);border-radius:9px;background:#1c2430;color:var(--mut);
+        font-size:13px;cursor:pointer;text-align:center;transition:.12s;user-select:none}
+  .mode:hover{background:#253049;color:#fff;border-color:#40516e}
+  .mode:active{transform:scale(.95)}
+  .mode.on{background:#1b2a47;border-color:var(--acc);color:#fff;box-shadow:0 0 8px rgba(77,141,255,.35)}
+  .vol{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:13px}
+  input[type=range]{flex:1;accent-color:var(--acc)}
+  .sec{display:flex;justify-content:space-between;align-items:center;margin:14px 4px 4px;color:var(--mut);font-size:13px}
+  .sec b{color:var(--fg);font-size:15px}
+  ul#list,ul#local{list-style:none}
+  .trk{display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:10px;cursor:pointer;user-select:none;
+             border-bottom:1px solid var(--line);transition:background .12s,transform .06s}
+  .trk:last-child{border-bottom:none}
+  .trk:hover{background:#2a3850}
+  .trk:hover .no{color:var(--acc);border-color:#5b6f94}
+  .trk:active{transform:scale(.985)}
+  .trk.cur{background:#1f3357;box-shadow:inset 4px 0 0 var(--acc)}
+  .trk.cur:hover{background:#294069}
+  .trk.cur .eq{display:flex}
+  .no{width:34px;height:34px;flex:none;border-radius:9px;background:#1c2430;border:1px solid var(--line);
+      display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--mut)}
+  .trk.cur .no{background:var(--acc);border-color:var(--acc);color:#fff}
+  .nm{flex:1;min-width:0}
+  .nm .t1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35}
+  .albb .nm .sub{color:var(--mut);font-size:12px;margin-top:1px}
+  .trk .nm .sub{color:var(--mut);font-size:11px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .eq{display:none;gap:2px;align-items:flex-end;height:16px}
+  .trk.cur .eq{display:flex}
+  .eq i{width:3px;background:var(--acc);border-radius:2px;animation:eq 1s ease-in-out infinite}
+  .eq i:nth-child(2){animation-delay:.2s} .eq i:nth-child(3){animation-delay:.4s}
+  @keyframes eq{0%,100%{height:4px}50%{height:15px}}
+  .tm{color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums}
+  .albb{display:flex;align-items:center;gap:10px;padding:11px 10px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+  .albb:last-child{border-bottom:none}
+  .albb:hover{background:#2a3850}
+  .albb:active{transform:scale(.99)}
+  .albicon{width:34px;height:34px;border-radius:9px;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;flex:none;transition:.15s}
+  .albb:hover .albicon{background:#6ea7ff}
+  .albicon.iccd{background:#3a6ea5}
+  .albb:hover .albicon.iccd{background:#5a8fc9}
+  .albicon.icloc{background:var(--ok)}
+  .albb:hover .albicon.icloc{background:#2fb58b}
+  .alb{background:#131a24;border:1px solid #26303f;border-radius:12px;margin:8px 0;overflow:hidden}
+  .alb .albb{border-bottom:none}
+  .alb.open .albb{border-bottom:1px solid var(--line)}
+  .rows{padding:4px 0 6px}
+  .rows .trk{padding-left:12px;padding-right:12px}
+  .meta{display:flex;align-items:center;gap:6px;flex:none;min-width:0}
+  .chips{display:flex;gap:4px;flex:none}
+  .chip{font-size:10px;line-height:1;padding:3px 6px;border-radius:20px;border:1px solid #2a3444;color:#5c6b80;background:#0f141d;user-select:none;white-space:nowrap}
+  .chip.cd.on{color:#8fd0ff;border-color:#2f6b9e;background:#132a3d}
+  .chip.loc.on{color:#7fe0bd;border-color:#1e7359;background:#0e2a21}
+  .playib{width:30px;height:30px;flex:none;border-radius:50%;border:1px solid #2a3444;background:#1c2430;color:#fff;cursor:pointer;font-size:12px;line-height:1;transition:.12s;user-select:none}
+  .playib:hover{background:var(--acc);border-color:var(--acc)}
+  .arrow{color:var(--mut);flex:none;font-size:10px;margin-left:2px;transition:transform .15s;width:12px;text-align:center}
+  .arrow.up{transform:rotate(180deg)}
+  .empty{color:var(--mut);font-size:13px;padding:12px 4px;text-align:center}
+  .alb .sub{color:var(--mut);font-size:12px}
+  .ripbar{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#10151d}
+  .ripbar .row{display:flex;justify-content:space-between;font-size:13px;color:var(--mut)}
+  .ripbar .rbg{height:6px;background:#0b0f15;border-radius:6px;overflow:hidden}
+  .ripbar .rbg>i{display:block;height:100%;width:0;background:var(--ok);transition:width .5s}
+  .err{color:#ff8a80;font-size:13px;padding:8px 4px}
+  .out{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;
+       padding:7px 10px;border:1px dashed var(--line);border-radius:10px;background:#10151f}
+  .out .ot{font-size:13px;font-weight:600;white-space:nowrap}
+  .out .od{font-size:12px;color:var(--mut);flex:1;min-width:140px}
+  .out .b.small{padding:4px 10px;font-size:12px;flex:none}
+  .btrow{display:flex;gap:8px;margin:2px 2px 6px}
+  .b.off{opacity:.55}
+  .b.on{background:#1b2a47;border-color:var(--acc);color:#fff;box-shadow:0 0 8px rgba(77,141,255,.35)}
+  .dev{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line);font-size:13px}
+  .dev:last-child{border-bottom:none}
+  .dev .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+  .dev .dm{color:var(--mut);font-size:11px;flex:none}
+  .dev .st-on{color:var(--ok);font-size:12px;font-weight:600;flex:none}
+  .dev .st-pd{color:var(--mut);font-size:12px;flex:none}
+  #btlist{max-height:240px;overflow:auto}
+  #btlist .b.small{padding:3px 10px;font-size:12px}
+  #btnote{color:var(--mut);font-size:12px}
+  .hidden{display:none!important}
+  #hint{color:var(--mut);font-size:12px;text-align:center;padding:12px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>AirPlay Hub</h1><span class="dot" id="dot"></span><small id="sub">AirPlay · CD · Bluetooth</small></header>
+
+  <div class="card">
+    <div class="now">
+      <img class="apart" id="apart" alt="">
+      <div class="t1"><span id="state">Loading…</span><span class="trackname off" id="songname">—</span></div>
+      <div class="prog" id="prog" title="Click or drag to seek"><i id="bar"></i><span class="thumb" id="thumb"></span></div>
+      <div class="times"><span id="el">0:00</span><span id="du">0:00</span></div>
+      <div class="modes">
+        <button class="mode" id="mRepeat">🔁 Repeat all</button>
+        <button class="mode" id="mRandom">🔀 Shuffle</button>
+        <button class="mode" id="mSingle">🔂 Repeat one</button>
+      </div>
+      <div class="btns">
+        <button class="b pnav" id="bPrev" title="Previous">⏮</button>
+        <button class="b main" id="bToggle">⏸ Pause</button>
+        <button class="b pnav" id="bNext" title="Next">⏭</button>
+        <button class="b ghost" id="bStop">⏹</button>
+      </div>
+      <div class="out">
+        <span class="ot" id="outTxt">🔌 Detecting…</span>
+        <span class="od" id="outDet"></span>
+        <button class="b small ghost" id="bOut">⇄ Switch output</button>
+        <button class="b small ghost" id="bBt" title="Bluetooth power / scan / pair">📶 Bluetooth</button>
+      </div>
+      <div class="vol"><span>Volume</span><input type="range" id="vol" min="0" max="100" value="60"></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="btcard">
+    <div class="sec" style="margin:8px 2px">
+      <b>📶 Bluetooth devices</b><span class="mut" id="btnote"></span>
+    </div>
+    <div class="btrow">
+      <button class="b small" id="bBtPwr">⏻ Bluetooth: …</button>
+      <button class="b small ghost" id="bBtScan">🔎 Scan devices</button>
+    </div>
+    <div id="btscan" class="mut hidden" style="padding:4px 8px 8px">📡 Scanning… devices appear as found (stops after ~6s)</div>
+    <div id="btlist"></div>
+    <div class="mut" id="btcodec" style="padding:6px 8px 0;font-size:12px;line-height:1.5">The Bluetooth codec is chosen by the speaker (SBC/aptX/LDAC…); the negotiated codec appears here once connected.</div>
+  </div>
+
+  <div class="card" style="padding:6px 12px">
+    <div class="sec" style="margin:8px 2px">
+      <b>🎵 Library</b><span id="shelfcount"></span>
+    </div>
+    <div id="cdbar" class="hidden" style="margin:0 0 6px">
+      <div class="btns">
+        <button class="b green" id="bPlayCd">▶ Play album</button>
+        <button class="b" id="bRip" onclick="doRip()">⏱ Rip disc to local</button>
+        <button class="b ghost small" id="bReId" onclick="doReidentify()" title="Re-read and identify when CD-Text/database info is wrong">🔄 Re-identify</button>
+      </div>
+      <div class="ripbar hidden" id="ripbar">
+        <div class="row"><span id="ripcur"></span><span id="ripprog"></span></div>
+        <div class="rbg"><i id="ripbarfill"></i></div>
+      </div>
+    </div>
+    <div id="shelf"></div>
+    <div class="err" id="err" style="display:none"></div>
+  </div>
+
+  <div id="hint">Tap any track to queue the whole library · 📶 Bluetooth = power / scan / pair speaker · Output toggles between wired DAC ⇄ Bluetooth</div>
+</div>
+<div id="actionStatus" class="sub" role="status" aria-live="polite"></div>
+<script>
+let lastSong=-1, ripBusy=false, ripDoneT=0, expanded={}, lastData=null, lastSt=null,
+    lastKey="", lastShelfT=0, lastPlayed="", lastApArtT=0;
+const __CD="__cd";
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
+function fmt(s){s=Math.floor(s||0);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
+function byId(i){return document.getElementById(i)}
+async function fetchJson(url, options={}){
+  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),90000);
+  try{
+    const response=await fetch(url,{...options,signal:controller.signal});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.msg||"Request failed");
+    return result;
+  }finally{clearTimeout(timer);}
+}
+async function api(url, body){
+  const options=body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{};
+  try{
+    const result=await fetchJson(url,options);
+    if(result.rc)throw new Error(result.msg||"Action failed");
+    byId("actionStatus").textContent="";
+    return result;
+  }catch(error){byId("actionStatus").textContent="⚠ "+(error.message||"Network error");return null;}
+}
+function chips(cdOn,locOn){
+  return '<span class="chips">'+
+    '<span class="chip cd'+(cdOn?" on":"")+'">💿CD</span>'+
+    '<span class="chip loc'+(locOn?" on":"")+'">🗂 Local</span></span>';
+}
+function fmtSize(t){
+  const f=t.fmt||"";
+  if(!(t.size>0))return f;
+  const mb=t.size/1048576;
+  return f+" · "+(mb>=1024?(mb/1024).toFixed(2)+" GB":mb.toFixed(1)+" MB");
+}
+function setNow(txt){const sn=byId("songname");sn.classList.remove("off");sn.textContent=txt}
+/* v10: all playback goes through one "whole-library queue" — after clear, every
+   track is queued, then we seek to the chosen uri. So ⏮/⏭, 🔁 repeat and 🔀
+   shuffle all apply across the entire library (across albums / drives). */
+function playAt(uri,title,tag){
+  setNow("▶ "+(title||"Loading queue…")+(tag||""));
+  api("/api/action",{action:"play_at",uri:uri});
+  setTimeout(refresh,400);
+}
+function playLocal(file,title){playAt(file,title," (local)")}
+function playCdTrack(n,title){playAt("cdda:///dev/sr0/"+n,title," (from CD)")}
+function pn(d){
+  setNow(d>0?"⏭ Next…":"⏮ Previous…");
+  api("/api/action",{action:d>0?"next":"prev"});
+  setTimeout(refresh,200);
+}
+function firstUriOf(dir){
+  if(dir==null)return null;
+  if(lastData&&lastData.cd&&lastData.cd.local_dir===dir&&(lastData.cd.tracks||[]).length){
+    const t=lastData.cd.tracks[0];return t.local_file||("cdda:///dev/sr0/"+t.n);
+  }
+  const a=(lastData.albums||[]).find(x=>x.dir===dir);
+  const t=a&&a.tracks&&a.tracks[0];
+  return t?t.file:null;
+}
+function cdFirstUri(){
+  const cd=lastData&&lastData.cd,t=cd&&cd.tracks&&cd.tracks[0];
+  return t?(t.local_file||("cdda:///dev/sr0/"+t.n)):null;
+}
+function trackCD(t){
+  const lf=t.local_file?esc(t.local_file):"";
+  return '<div class="trk" data-cmd="cd-track" data-n="'+t.n+'" data-lf="'+lf+'">'+
+    '<span class="no">'+t.n+'</span>'+
+    '<span class="nm"><div class="t1">'+esc(t.title||("Track "+t.n))+'</div><div class="sub">'+fmtSize(t)+'</div></span>'+
+    '<span class="eq"><i></i><i></i><i></i></span>'+
+    '<span class="meta"><span class="tm">'+fmt(t.dur)+'</span>'+chips(true,!!t.local_file)+'</span></div>';
+}
+function trackLOC(t){
+  return '<div class="trk" data-cmd="loc-track" data-file="'+esc(t.file)+'" data-tt="'+esc(t.title)+'">'+
+    '<span class="no">'+t.n+'</span>'+
+    '<span class="nm"><div class="t1">'+esc(t.title)+'</div><div class="sub">'+fmtSize(t)+'</div></span>'+
+    '<span class="eq"><i></i><i></i><i></i></span>'+
+    '<span class="meta">'+chips(false,true)+'</span></div>';
+}
+function rowsFor(k){
+  if(!lastData)return "";
+  if(k===__CD&&lastData.cd)return (lastData.cd.tracks||[]).map(trackCD).join("");
+  const a=(lastData.albums||[]).find(x=>x.dir===k);
+  return a?(a.tracks||[]).map(trackLOC).join(""):"";
+}
+function albumCard(key,icon,icCls,title,sub,headChips,playAct,rowsHtml){
+  const open=!!expanded[key];
+  return '<div class="alb'+(open?" open":"")+'">'+
+    '<div class="albb" data-cmd="tgl" data-key="'+esc(key)+'">'+
+    '<div class="albicon '+icCls+'">'+icon+'</div>'+
+    '<div class="nm"><div class="t1">'+esc(title)+'</div><div class="sub">'+esc(sub)+'</div></div>'+
+    headChips+
+    '<button class="playib" data-cmd="playall" data-act="'+esc(playAct)+'" title="Play album">▶</button>'+
+    '<span class="arrow'+(open?" up":"")+'">▾</span></div>'+
+    (open?'<div class="rows">'+rowsHtml+'</div>':"")+
+    '</div>';
+}
+function renderShelf(d){
+  if(!d)return;
+  const key=JSON.stringify(d);
+  if(key===lastKey)return;
+  lastKey=key;lastData=d;
+  let html="",cnt=0;
+  if(d.cd){
+    cnt++;
+    const cd=d.cd,tr=cd.tracks||[];
+    const locN=tr.filter(t=>t.local_file).length;
+    const title=(cd.artist?cd.artist+" — ":"")+(cd.album||"Unknown album")+(cd.year?" · "+cd.year:"");
+    const sub=cd.local_dir?("In drive · ripped "+locN+"/"+tr.length):"In drive · not ripped (tap to read CD)";
+    html+=albumCard(__CD,"💿","iccd",title,sub,chips(true,!!cd.local_dir),
+      cd.local_dir?("play_album:"+cd.local_dir):"play_cd_disc",
+      tr.map(trackCD).join(""));
+  }else if(d.cd_err){
+    html+='<div class="empty">'+esc(d.cd_err)+'</div>';
+  }
+  (d.albums||[]).forEach(a=>{
+    cnt++;
+    const title=(a.artist?a.artist+" — ":"")+(a.album||a.dir);
+    html+=albumCard(a.dir,"🗂","icloc",title,a.tracks.length+" tracks · local",chips(false,true),
+      "play_album:"+a.dir,a.tracks.map(trackLOC).join(""));
+  });
+  byId("shelf").innerHTML=html;
+  byId("shelfcount").textContent=cnt?(cnt+" album"+(cnt===1?"":"s")):"";
+  const cdbar=byId("cdbar");
+  cdbar.classList.toggle("hidden",!d.cd);
+  if(d.cd){byId("bPlayCd").textContent="▶ Play album"+(d.cd.local_dir?" (local)":" (from CD)");}
+  syncRipBtn();
+  applyCur();
+}
+function syncRipBtn(){
+  const cd=lastData&&lastData.cd;
+  if(!cd)return;
+  const tr=cd.tracks||[],locN=tr.filter(t=>t.local_file).length;
+  const btn=byId("bRip");
+  if(ripBusy)return;
+  if(tr.length&&locN>=tr.length){btn.textContent="✅ All local";btn.disabled=true;}
+  else{btn.textContent="⏱ Rip disc to local";btn.disabled=false;}
+}
+let shelfPending=false;
+async function loadShelf(){
+  if(shelfPending)return;
+  shelfPending=true;
+  try{renderShelf(await fetchJson("/api/shelf"));}catch(e){}
+  finally{shelfPending=false;}
+}
+function forceReload(){lastKey="";loadShelf();}
+function applyCur(){
+  if(!lastData||!lastSt)return;
+  const rows=byId("shelf").querySelectorAll(".trk");
+  let played="";
+  if(lastSt.local&&lastSt.local_file){played="L:"+lastSt.local_file;}
+  else if(!lastSt.local&&lastSt.song){played="C:"+lastSt.song;}
+  rows.forEach(r=>{
+    let hit=false;
+    if(lastSt.local&&lastSt.local_file){
+      hit=(r.dataset.file===lastSt.local_file)||(r.dataset.lf===lastSt.local_file);
+    }else if(!lastSt.local&&lastSt.song){
+      hit=(r.dataset.cmd==="cd-track"&&Number(r.dataset.n)===lastSt.song);
+    }
+    r.classList.toggle("cur",hit);
+    if(hit&&played!==lastPlayed){r.scrollIntoView({block:"nearest"});}
+  });
+  lastPlayed=played;
+}
+function onShelf(ev){
+  const el=ev.target.closest("[data-cmd]");
+  if(!el)return;
+  const cmd=el.dataset.cmd;
+  if(cmd==="tgl"){
+    const k=el.dataset.key,alb=el.closest(".alb");
+    if(!alb)return;
+    expanded[k]=!expanded[k];
+    if(expanded[k]){
+      alb.classList.add("open");
+      let rows=alb.querySelector(".rows");
+      if(!rows){rows=document.createElement("div");rows.className="rows";rows.innerHTML=rowsFor(k);alb.appendChild(rows);}
+    }else{
+      alb.classList.remove("open");
+      const rows=alb.querySelector(".rows");if(rows)rows.remove();
+    }
+    const ar=alb.querySelector(".arrow");if(ar)ar.classList.toggle("up",expanded[k]);
+  }else if(cmd==="cd-track"){
+    const n=Number(el.dataset.n);
+    const t=(lastData.cd.tracks||[]).find(x=>x.n===n);
+    if(!t)return;
+    if(t.local_file){playLocal(t.local_file,t.title||("Track "+n));}
+    else{playCdTrack(n,t.title||("Track "+n));}
+  }else if(cmd==="loc-track"){
+    playLocal(el.dataset.file,el.dataset.tt);
+  }else if(cmd==="playall"){
+    const ps=el.dataset.act.split(":"),m=ps[0],arg=ps.slice(1).join(":")||"";
+    let uri=null;
+    if(m==="play_cd_disc"){uri=cdFirstUri();}
+    else{uri=firstUriOf(arg);}
+    if(uri){playAt(uri,"▶ Playing album…");}
+    else{setNow("…");}
+    setTimeout(refresh,300);
+  }
+}
+byId("shelf").addEventListener("click",onShelf);
+async function doReidentify(){
+  const ok=confirm("Re-read this disc's track info?\n(Stops current playback; prefers the disc's CD-Text)");
+  if(!ok)return;
+  const btn=byId("bReId");
+  const old=btn.textContent;
+  btn.textContent="⏳ Identifying…";btn.disabled=true;
+  let msg="";
+  try{
+    const r=await fetch("/api/action",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"reidentify"})});
+    const j=await r.json();
+    msg=(j&&j.msg)?j.msg:"(no response)";
+  }catch(e){msg="Network error"}
+  btn.textContent=old;btn.disabled=false;
+  alert(msg);
+  setTimeout(refresh,800);
+}
+async function doRip(){
+  if(ripBusy)return;
+  const ok=confirm("Rip the whole disc to the local library?\n(Takes a few minutes; keep the disc in until done. Afterwards it plays without the disc.)");
+  if(!ok)return;
+  await api("/api/action",{action:"rip",tracks:null});
+  setTimeout(pollRip,500);
+}
+let ripPollPending=false;
+async function pollRip(){
+  if(ripPollPending)return;
+  ripPollPending=true;
+  try{await refreshRip();}finally{ripPollPending=false;}
+}
+async function refreshRip(){
+  let r;try{r=await fetchJson("/api/ripstatus")}catch(e){return}
+  const bar=document.getElementById("ripbar");
+  const btn=document.getElementById("bRip");
+  const cur=document.getElementById("ripcur");
+  const prog=document.getElementById("ripprog");
+  const fill=document.getElementById("ripbarfill");
+  const now=Date.now()/1000;
+  if(r.running){                       // ── ripping
+    ripBusy=true;btn.textContent="⏱ Ripping…";btn.disabled=true;
+    bar.classList.remove("hidden");
+    cur.textContent=r.cur||"Preparing…";
+    prog.textContent=r.total?("Ripped "+r.done+"/"+r.total):"";
+    fill.style.width=r.total?(r.done/r.total*100)+"%":"0%";
+    ripDoneT=0;
+  }else if(r.err){                     // ── error (retryable)
+    ripBusy=false;btn.textContent="⏱ Retry rip";btn.disabled=false;
+    bar.classList.remove("hidden");
+    cur.textContent="⚠ Error: "+r.err;
+    prog.textContent=r.total?("Ripped "+r.done+"/"+r.total):"";
+    fill.style.width=r.total?(r.done/r.total*100)+"%":"0%";
+    ripDoneT=0;
+  }else{                               // ── idle or just finished
+    const justDone=(r.total>0&&r.done>=r.total&&r.finished_t
+                   &&(now-r.finished_t)<45);
+    if(justDone){                      // keep the done state for 45s (backend finished_t)
+      if(ripDoneT!==r.finished_t){ripDoneT=r.finished_t;forceReload();}
+      ripBusy=true;btn.textContent="✅ Rip complete";btn.disabled=true;
+      bar.classList.remove("hidden");
+      cur.textContent="✅ Done: "+(r.album||"");
+      prog.textContent="Ripped "+r.done+"/"+r.total+" tracks — playable without the disc";
+      fill.style.width="100%";
+    }else{
+      bar.classList.add("hidden");
+      btn.textContent="⏱ Rip disc to local";btn.disabled=false;ripBusy=false;
+      ripDoneT=0;
+    }
+  }
+}
+let btOpen=false, btSig="";
+function btTicker(bt,link){
+  if(!bt)return;
+  const b=byId("bBt");
+  b.classList.toggle("off",bt.powered===false);
+  b.title=bt.powered===false?"Bluetooth off — tap to manage":"Bluetooth power / scan / pair";
+  if(!btOpen)return;                    // don't update internals while collapsed
+  const pw=byId("bBtPwr");
+  if(bt.powered===null){pw.textContent="⏻ Bluetooth: …";pw.disabled=true;}
+  else{pw.textContent=bt.powered?"⏻ Turn off Bluetooth":"⏻ Turn on Bluetooth";pw.disabled=false;}
+  byId("bBtScan").disabled=!!bt.discovering;
+  byId("btscan").classList.toggle("hidden",!bt.discovering);
+  let note=bt.err?("⚠ "+bt.err):"";
+  if(!note&&bt.last)note=(bt.last.ok?"✓ ":"⚠ ")+bt.last.msg;
+  byId("btnote").textContent=note;
+  const conn=(bt.devices||[]).filter(d=>d.connected).map(d=>(d.name&&d.name!==d.mac)?d.name:d.mac);
+  const ft=byId("btcodec");
+  if(ft){
+    if(link&&link.mode==="bt")
+      ft.textContent="The Bluetooth codec is chosen by the speaker (SBC/aptX/LDAC…); current speaker "+(link.desc||"Bluetooth")
+        +", codec "+(link.codec||"SBC")+(link.kbps?(" (~"+link.kbps+" kbps)"):"")+".";
+    else if(conn.length)
+      ft.textContent="The Bluetooth codec is chosen by the speaker (SBC/aptX/LDAC…); connected "+conn.join(", ")
+        +", output is currently wired — use the «⇄» button on the play card to switch to Bluetooth.";
+    else
+      ft.textContent="The Bluetooth codec is chosen by the speaker (SBC/aptX/LDAC…); the negotiated codec appears here once connected.";
+  }
+  const sig=JSON.stringify([bt.busy?bt.busy.mac:null,bt.last?bt.last.msg:null,bt.devices||[]]);
+  if(sig!==btSig){btSig=sig;btList(bt);}   // redraw only when data changes, to not interrupt clicks
+}
+function btList(bt){
+  const ls=byId("btlist");ls.innerHTML="";
+  if(bt.powered===false){ls.innerHTML="<div class='dev'><span class='dm'>Bluetooth off — turn it on, then scan</span></div>";return;}
+  if(bt.powered===null){ls.innerHTML="<div class='dev'><span class='dm'>Detecting Bluetooth status…</span></div>";return;}
+  const devs=bt.devices||[];
+  if(!devs.length){ls.innerHTML="<div class='dev'><span class='dm'>No devices — tap Scan devices to find nearby Bluetooth speakers</span></div>";return;}
+  const bz=bt.busy;
+  const actLbl=bz&&bz.act?({pair:"Pairing",connect:"Connecting",disconnect:"Disconnecting"}[bz.act]||"Working"):"";
+  for(const d of devs){
+    const nm=(d.name&&d.name!==d.mac)?d.name:d.mac;
+    const busyHere=bz&&d.mac===bz.mac;
+    const st=d.connected?"<span class='st-on'>Connected</span>":d.paired?"<span class='st-pd'>Paired</span>":"<span class='dm'>Not paired</span>";
+    const lbl=busyHere?("⏳ "+actLbl+"…"):(d.connected?"Disconnect":d.paired?"Connect":"Pair");
+    const row=document.createElement("div");row.className="dev";
+    row.innerHTML="<span class='dn'>"+esc(nm)+"</span>"+st
+      +"<button class='b small ghost' data-mac='"+d.mac+"' data-cmd='"+(d.connected?"disconnect":d.paired?"connect":"pair")+"'"+(busyHere?" disabled":"")+">"+lbl+"</button>";
+    ls.appendChild(row);
+  }
+}
+async function btCmd(cmd,mac,btn){
+  if(btn.dataset.busy)return;btn.dataset.busy=1;
+  const old=btn.textContent;btn.textContent="⏳…";btn.disabled=true;
+  let msg="";
+  try{
+    const j=await(await fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"bt_"+cmd,mac:mac})})).json();
+    msg=(j&&j.msg)||"";
+    if(j&&j.rc!==0&&msg)alert("⚠ "+msg);
+  }catch(e){}
+  btn.textContent=old;btn.disabled=false;delete btn.dataset.busy;
+  btSig="";setTimeout(refresh,700);
+}
+byId("btlist").onclick=e=>{
+  const b=e.target.closest("button[data-mac]");
+  if(!b||b.disabled)return;
+  btCmd(b.dataset.cmd,b.dataset.mac,b);
+};
+byId("bBt").onclick=()=>{
+  btOpen=!btOpen;
+  byId("btcard").classList.toggle("hidden",!btOpen);
+  byId("bBt").classList.toggle("on",btOpen);
+  btSig="";
+  if(btOpen&&lastSt&&lastSt.bt)btList(lastSt.bt);
+  refresh();
+};
+byId("bBtPwr").onclick=()=>{
+  const p=lastSt&&lastSt.bt?lastSt.bt.powered:null;
+  if(p===null)return;
+  api("/api/action",{action:"bt_power",on:!p});
+  byId("bBtPwr").disabled=true;
+  setTimeout(refresh,600);
+};
+byId("bBtScan").onclick=()=>{
+  api("/api/action",{action:"bt_scan"});
+  byId("bBtScan").disabled=true;
+  setTimeout(refresh,400);
+};
+
+let refreshPending=false;
+async function refresh(){
+  if(refreshPending)return;
+  refreshPending=true;
+  try{await refreshStatus();}finally{refreshPending=false;}
+}
+async function refreshStatus(){
+  let st;
+  try{st=await fetchJson("/api/status")}catch(e){
+    byId("state").textContent="Disconnected";
+    byId("dot").className="dot";
+    return;
+  }
+  lastSt=st;
+  const dot=byId("dot"),stEl=byId("state");
+  dot.className="dot"+(st.state==="playing"?" on":"");
+  stEl.textContent=st.state==="playing"?"Playing":st.state==="paused"?"Paused":"Stopped";
+  stEl.className=st.state;
+  let txt="—",off=true;
+  if(st.song&&!st.local){
+    const t=lastData&&lastData.cd?(lastData.cd.tracks||[]).find(x=>x.n===st.song):null;
+    txt=(t&&t.title)?t.title:("Track "+st.song);
+    if(t&&!t.local_file)txt+=" (from CD)";
+    off=false;
+  }else if(st.local&&st.local_file){
+    txt="♪ "+st.local_file.split("/").pop().replace(/[.](flac|wav|mp3|m4a|ogg)$/i,"");
+    off=false;
+  }
+  const ap=st.airplay||{},apOn=!!ap.active;
+  if(apOn){
+    stEl.textContent=ap.paused?"AirPlay paused":"AirPlay";dot.className="dot"+(ap.paused?"":" on");
+    txt=(ap.title||"AirPlay playing")+(ap.artist?" — "+ap.artist:"");
+    off=false;
+    const at=ap.art_t||0;
+    if(at>lastApArtT){lastApArtT=at;byId("apart").src="/api/airplay_art?t="+Math.floor(at);}
+  }
+  const sn=byId("songname");sn.textContent=txt;sn.classList.toggle("off",off);
+  byId("apart").classList.toggle("show",apOn);
+  if(apOn){
+    const d=ap.duration>0?ap.duration:0;
+    const w=d>0?Math.min(100,(ap.elapsed||0)/d*100):0;
+    byId("bar").style.width=w+"%";
+    byId("thumb").style.left=w+"%";
+    if(!dragging)byId("el").textContent=fmt(ap.elapsed||0);
+    byId("du").textContent=d>0?fmt(d):"AirPlay";
+  }else{
+    const w=st.duration>0?Math.min(100,st.elapsed/st.duration*100):0;
+    byId("bar").style.width=w+"%";
+    byId("thumb").style.left=w+"%";
+    if(!dragging)byId("el").textContent=fmt(st.elapsed);
+    byId("du").textContent=st.duration>0?fmt(st.duration):"—";
+  }
+  const lk=st.link,au=st.audio;
+  const ot=byId("outTxt"),od=byId("outDet"),bo=byId("bOut");
+  if(lk&&lk.mode==="bt"){
+    ot.textContent="📶 Bluetooth · "+(lk.desc||"Speaker");
+    let d="";
+    if(lk.codec)d+=(lk.kbps?"≈"+lk.kbps+" kbps "+lk.codec+" link":lk.codec+" link");
+    if(au)d+=" · Source "+au.rate/1000+"kHz/"+au.depth+"bit "+au.kbps+" kbps";
+    od.textContent=d||"Not playing";
+    bo.textContent="⇄ Switch to wired";bo.disabled=false;bo.title="Switch back to USB DAC wired output";
+  }else if(lk&&lk.mode==="wired"){
+    ot.textContent="🔌 Wired · USB DAC";
+    od.textContent=au?(au.rate/1000+"kHz · "+au.depth+"bit · "+au.ch+"ch · "+au.kbps+" kbps"):"Not playing";
+    const hasBt=(lk.bt_sinks||[]).length>0;
+    bo.textContent="⇄ Switch to Bluetooth";bo.disabled=!hasBt;
+    bo.title=hasBt?"Switch to the Bluetooth speaker":"No Bluetooth speaker found — pair one on the device first";
+  }else if(lk){
+    ot.textContent="⛔ No output device";od.textContent="";bo.disabled=true;bo.title="";
+  }else{
+    ot.textContent="…";od.textContent="Disconnected";bo.disabled=true;
+  }
+  byId("bToggle").textContent=st.state==="playing"?"⏸ Pause":"▶ Play";
+  const stopped=st.state==="stopped";
+  byId("bPrev").disabled=stopped||apOn;
+  byId("bNext").disabled=stopped||apOn;
+  /* AirPlay playing: lock MPD transport keys to avoid mixing two sources; restore after */
+  byId("bToggle").disabled=apOn;
+  byId("bStop").disabled=apOn;
+  for(const id of["mRepeat","mRandom","mSingle"])byId(id).disabled=apOn;
+  byId("bToggle").title=apOn?"AirPlay playing — use iPhone Control Center to pause or skip":"";
+  const vol=byId("vol");
+  if(document.activeElement!==vol){vol.value=st.volume??60;}
+  applyCur();
+  const now=Date.now();
+  if(now-lastShelfT>4000){lastShelfT=now;loadShelf();}
+  syncModes(st);
+  pollRip();
+  btTicker(st.bt, st.link);
+}
+function syncModes(st){
+  const map={repeat:"mRepeat",random:"mRandom",single:"mSingle"};
+  for(const k in map){
+    document.getElementById(map[k]).classList.toggle("on",!!st[k]);
+  }
+}
+function modeClick(key,btn){
+  const next=!btn.classList.contains("on");
+  api("/api/action",{action:"mode",key:key,on:next});
+  btn.classList.toggle("on",next);
+  if(key==="single"&&next)document.getElementById("mRepeat").classList.add("on");
+  setTimeout(refresh,200);
+}
+document.getElementById("mRepeat").onclick=()=>modeClick("repeat",document.getElementById("mRepeat"));
+document.getElementById("mRandom").onclick=()=>modeClick("random",document.getElementById("mRandom"));
+document.getElementById("mSingle").onclick=()=>modeClick("single",document.getElementById("mSingle"));
+byId("bPlayCd").onclick=()=>{
+  const cd=lastData&&lastData.cd;
+  if(!cd)return;
+  const uri=cdFirstUri();
+  if(uri){playAt(uri,"▶ Playing album…",cd.local_dir?" (local)":" (from CD)");}
+};
+byId("bPrev").onclick=()=>pn(-1);
+byId("bNext").onclick=()=>pn(1);
+byId("bOut").onclick=()=>{
+  const lk=(lastSt&&lastSt.link)||{};
+  const to=lk.mode==="bt"?"wired":"bt";
+  byId("bOut").textContent="⏳ Switching…";
+  api("/api/action",{action:"switch_output",to:to});
+  setTimeout(refresh,900);
+};
+document.getElementById("bToggle").onclick=()=>{api("/api/action",{action:"toggle"});setTimeout(refresh,150)};
+document.getElementById("bStop").onclick=()=>{api("/api/action",{action:"stop"});refresh()};
+const vol=document.getElementById("vol");
+let vt;vol.oninput=()=>{clearTimeout(vt);vt=setTimeout(()=>api("/api/action",{action:"volume",volume:vol.value}),200)};
+/* v13: click/drag seek on the progress bar (Pointer Events — works with mouse + touch) */
+const prog=byId("prog");
+let dragPct=0,dragging=false;
+function pctFromEvent(e){
+  const r=prog.getBoundingClientRect();
+  if(!r.width)return 0;
+  return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+}
+function paintDrag(){
+  byId("bar").style.width=(dragPct*100)+"%";
+  byId("thumb").style.left=(dragPct*100)+"%";
+  byId("el").textContent=fmt(dragPct*(lastSt&&lastSt.duration||0));
+}
+prog.addEventListener("pointerdown",e=>{
+  if(!lastSt||!(lastSt.duration>0)||lastSt.state==="stopped")return;
+  dragging=true;prog.classList.add("dragging");
+  try{prog.setPointerCapture(e.pointerId)}catch(err){}
+  dragPct=pctFromEvent(e);paintDrag();
+  e.preventDefault();
+});
+prog.addEventListener("pointermove",e=>{if(dragging){dragPct=pctFromEvent(e);paintDrag();}});
+function endDrag(e){
+  if(!dragging)return;
+  dragging=false;prog.classList.remove("dragging");
+  dragPct=pctFromEvent(e);
+  const target=Math.round(dragPct*lastSt.duration);
+  paintDrag();
+  api("/api/action",{action:"seek",pos:target});
+  setTimeout(refresh,350);
+}
+prog.addEventListener("pointerup",endDrag);
+prog.addEventListener("pointercancel",()=>{dragging=false;prog.classList.remove("dragging");});
+refresh();loadShelf();setInterval(refresh,1000);
+</script>
+</body>
+</html>

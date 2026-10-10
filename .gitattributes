@@ -1,0 +1,16 @@
+# The application runs on Linux and is deployed by copying files to a device,
+# so every text file has to stay LF in the working tree as well as in the repo.
+* text=auto eol=lf
+
+*.html text
+*.py text
+*.cjs text
+*.md text
+*.yml text
+*.toml text
+*.service text
+
+# Fonts and images, should any be added.
+*.png binary
+*.jpg binary
+*.ico binary

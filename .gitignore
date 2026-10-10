@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node (frontend test suite)
+node_modules/
+package-lock.json
+
+# Deployment artefacts
+baseline.json
+*.tar.gz
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*~

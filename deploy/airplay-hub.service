@@ -1,0 +1,45 @@
+[Unit]
+Description=AirPlay hub control web UI
+Documentation=https://github.com/HarrisonWu/airplay-hub
+# The application drives MPD, Bluetooth and an optical drive, and reads an
+# AirPlay metadata pipe; it manages none of them, so they come first.
+After=network.target mpd.service bluetooth.service
+Wants=mpd.service
+
+[Service]
+Type=simple
+# The package lives at /opt/cdplayer/airplay_hub and is imported as a package,
+# so the working directory has to be the application root.
+WorkingDirectory=/opt/cdplayer
+ExecStart=/usr/bin/python3 -m airplay_hub
+
+# Playback and ripping are done through MPD and the audio group.
+User=mpd
+Group=audio
+SupplementaryGroups=audio
+
+# PulseAudio's socket lives in this user's runtime directory; without it the
+# process can play through MPD but cannot enumerate or switch sinks.
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=PYTHONUNBUFFERED=1
+
+# Seconds subtracted from the reported AirPlay position. Raise it for a
+# Bluetooth output path, which adds more latency than a wired DAC.
+Environment=AIRPLAY_HUB_AP_LATENCY=0.05
+# Parent directory of the meta/ disc metadata cache.
+Environment=AIRPLAY_HUB_DATA_DIR=/opt/cdplayer
+
+Restart=on-failure
+RestartSec=3
+
+# The process writes the metadata cache, and a rip writes into the music
+# library. Both stay inside the two paths below; everything else is read-only.
+# PrivateTmp is deliberately NOT enabled: shairport-sync creates its metadata
+# pipe at /tmp/shairport-sync-metadata, and a private /tmp would hide it.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/cdplayer /var/lib/mpd/music
+
+[Install]
+WantedBy=multi-user.target

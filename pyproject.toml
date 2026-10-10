@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "airplay-hub"
+dynamic = ["version"]
+description = "Self-hosted web console for an AirPlay, CD and Bluetooth audio hub"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Harrison Wu" }]
+keywords = ["airplay", "shairport-sync", "mpd", "pulseaudio", "bluetooth", "orangepi"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+# Deliberately empty: the application runs on the standard library alone.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/HarrisonWu/airplay-hub"
+Source = "https://github.com/HarrisonWu/airplay-hub"
+Issues = "https://github.com/HarrisonWu/airplay-hub/issues"
+
+[project.scripts]
+airplay-hub = "airplay_hub.webapp:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.dynamic]
+version = { attr = "airplay_hub.__version__" }
+
+[tool.setuptools.package-data]
+airplay_hub = ["templates/*.html"]
