@@ -71,10 +71,31 @@ make && sudo make install
 
 The `prgr` timeline is still expressed in 44 100 Hz RTP frames under AirPlay 2;
 that is the clock base for progress arithmetic, **not** the DAC output rate. The
-output format is negotiated by PulseAudio/PipeWire with the sink — on the
-verified host the USB DAC sink reports `s32le 2ch 48000Hz`, so a 96 kHz output
-is not configured by this repository. Check it with
-`pactl list sinks | grep 'Sample Specification'`.
+output format is negotiated by PulseAudio/PipeWire with the sink.
+
+By default PipeWire fixes the graph at 48 kHz and resamples everything to it. To
+let CD/AirPlay (44.1 kHz) and high-resolution files (96 kHz) reach the DAC at
+their native rate, enable the rate list shipped with PipeWire 1.4.2 for the
+account that owns the audio server:
+
+```sh
+mkdir -p ~/.config/pipewire/pipewire.conf.d
+cp /usr/share/pipewire/pipewire.conf.avail/10-rates.conf \
+   ~/.config/pipewire/pipewire.conf.d/10-rates.conf
+systemctl --user restart pipewire pipewire-pulse wireplumber
+sudo systemctl restart mpd shairport-sync airplay-hub
+```
+
+`10-rates.conf` sets `default.clock.allowed-rates = [ 44100 48000 88200 96000 ]`
+while leaving `default.clock.rate = 48000` as the idle rate, so the graph follows
+the active stream instead of upsampling 44.1 kHz material to 96 kHz. Verified on
+the Raspberry Pi 5 with a MOONDROP Dawn Pro (USB Audio Class, 44.1–384 kHz,
+S16/S24/S32): a 96 kHz stream opens the sink at `s32le 2ch 96000Hz`, a 44.1 kHz
+stream at `s32le 2ch 44100Hz`, and the idle sink stays at 48000 Hz. Check with
+`pactl list sinks | grep -E 'State:|Sample Specification:'`.
+
+AirPlay 2 itself streams ALAC at 44.1 kHz / 16-bit; the 96 kHz path benefits
+local high-resolution files played through MPD, not AirPlay.
 
 ```sh
 /usr/local/bin/shairport-sync --version
