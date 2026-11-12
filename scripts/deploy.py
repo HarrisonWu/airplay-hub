@@ -107,7 +107,9 @@ def data_manifest():
         'music': [(str(p), p.stat().st_size, p.stat().st_mtime_ns)
                   for p in sorted(Path('/var/lib/mpd/music').rglob('*')) if p.is_file()],
         'configuration': {str(p): digest(p) for p in
-                          (Path('/etc/shairport-sync.conf'), Path('/etc/mpd.conf')) if p.is_file()},
+                          (Path('/etc/shairport-sync.conf'),
+                           Path('/usr/local/etc/shairport-sync.conf'),
+                           Path('/etc/mpd.conf')) if p.is_file()},
     }
 
 

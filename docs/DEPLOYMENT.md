@@ -41,6 +41,46 @@ curl -s http://127.0.0.1:8080/api/status
 `/api/status` answering with JSON means the process is serving; the UI is at
 `http://<host>:8080/`.
 
+## AirPlay 2 receiver
+
+The distribution package of shairport-sync (4.x, e.g. `4.3.7-1` on Debian) is
+an AirPlay 1 receiver. AirPlay 2 needs a locally built 5.x binary plus `nqptp`,
+which supplies the PTP clock the stream is timed against. The hub itself only
+reads the metadata pipe, but it reports no AirPlay session at all if the
+receiver is not running.
+
+A build verified on the Raspberry Pi 5 (Debian 13, shairport-sync `5.6.1`):
+
+```sh
+./configure --prefix=/usr/local --sysconfdir=/usr/local/etc \
+  --with-airplay-2 --with-alsa --with-pulseaudio --with-soxr \
+  --with-avahi --with-ssl=openssl --with-metadata \
+  --with-dbus-interface --with-mpris-interface
+make && sudo make install
+```
+
+| Item | Value |
+| --- | --- |
+| Binary | `/usr/local/bin/shairport-sync` (not the packaged `/usr/bin` one) |
+| Config | `/usr/local/etc/shairport-sync.conf` — `--sysconfdir` moves it out of `/etc` |
+| Timing | `nqptp.service` must be active before `shairport-sync.service` |
+| Unit | `ExecStart=/usr/local/bin/shairport-sync -c /usr/local/etc/shairport-sync.conf` |
+| Audio account | a drop-in overriding `User=`/`Group=` to the account owning the audio server socket (see below) |
+| Metadata | `metadata.enabled = "yes"`, `pipe_name = "/tmp/shairport-sync-metadata"` |
+| Output | `general.output_backend = "pulseaudio"` |
+
+The `prgr` timeline is still expressed in 44 100 Hz RTP frames under AirPlay 2;
+that is the clock base for progress arithmetic, **not** the DAC output rate. The
+output format is negotiated by PulseAudio/PipeWire with the sink — on the
+verified host the USB DAC sink reports `s32le 2ch 48000Hz`, so a 96 kHz output
+is not configured by this repository. Check it with
+`pactl list sinks | grep 'Sample Specification'`.
+
+```sh
+/usr/local/bin/shairport-sync --version
+systemctl is-active nqptp shairport-sync airplay-hub
+```
+
 ## The audio server account
 
 This is the one thing that reliably goes wrong on a fresh install, so it is
@@ -168,9 +208,12 @@ entry point as a script. The application is now a package under
    Do this after verification, not before — the flat files are not part of the
    new baseline, so they are neither backed up nor restored.
 
-`deploy.py` deliberately does not manage `/etc/mpd.conf`,
-`/etc/shairport-sync.conf` or the music library; those stay under the
-operator's control, and the script only proves it left them alone.
+`deploy.py` deliberately does not manage `/etc/mpd.conf`, the shairport-sync
+configs or the music library; those stay under the operator's control, and the
+script only proves it left them alone. It snapshots both
+`/etc/shairport-sync.conf` (packaged 4.x) and
+`/usr/local/etc/shairport-sync.conf` (AirPlay 2 build), since either may be the
+active file depending on how the receiver was installed.
 
 ## Notes
 
@@ -179,10 +222,10 @@ operator's control, and the script only proves it left them alone.
   trusted LAN. Do not expose port 8080 to an untrusted network. If you must
   reach it remotely, put it behind a reverse proxy that terminates
   authentication, or behind a VPN.
-- **Bluetooth and AirPlay are prerequisites, not options.** The unit assumes
-  BlueZ and shairport-sync are already running; it does not start them.
+- **Bluetooth and AirPlay 2 are prerequisites, not options.** The unit assumes
+  BlueZ, `nqptp` and shairport-sync are already running; it does not start them.
   shairport-sync must be configured to write its metadata pipe to
-  `/tmp/shairport-sync-metadata`.
+  `/tmp/shairport-sync-metadata` — see [AirPlay 2 receiver](#airplay-2-receiver).
 - **The metadata cache is disposable.** Deleting
   `$AIRPLAY_HUB_DATA_DIR/meta` costs one upstream lookup per disc and changes
   nothing else. "Re-identify" in the UI does the same for the disc in the drive.

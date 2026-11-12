@@ -6,9 +6,9 @@ whole thing runs on the Python standard library alone — no framework, no
 database, no external services.
 
 ```
-AirPlay  (shairport-sync) ┐
-music library  (MPD)      ├─→ MPD / shairport-sync ─→ PulseAudio ─→ USB DAC
-optical drive (cdparanoia)┘                                        └→ Bluetooth A2DP
+AirPlay 2 (shairport-sync 5.x + nqptp) ┐
+music library  (MPD)                    ├─→ MPD / shairport-sync ─→ PulseAudio ─→ USB DAC
+optical drive (cdparanoia)              ┘                                        └→ Bluetooth A2DP
 ```
 
 ## Features
@@ -45,9 +45,14 @@ Runtime, on the device:
 | `mpc` | MPD command client, used for transport control |
 | PulseAudio | audio hub; the wired DAC and Bluetooth sinks both live here |
 | `pactl` | sink inspection and output switching (`pulseaudio-utils`) |
-| shairport-sync | AirPlay receiver, with the metadata pipe enabled |
+| shairport-sync | AirPlay 2 receiver built with `--with-airplay-2` and `--with-metadata`; a 5.x build, not the distribution's 4.x package |
+| nqptp | PTP clock for AirPlay 2; must be running before shairport-sync |
 | `cdparanoia`, `flac`, `cd-discid`, `cdrdao` | ripping and metadata |
 | BlueZ (`bluetoothctl`) | Bluetooth adapter management over D-Bus |
+
+The [AirPlay 2 receiver](docs/DEPLOYMENT.md#airplay-2-receiver) section of the
+deployment guide records the verified 5.6.1 build, its config path and the
+metadata pipe settings.
 
 Development only: Node.js 18+ for the frontend test suite.
 

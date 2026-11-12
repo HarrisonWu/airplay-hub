@@ -86,7 +86,9 @@ into unbounded thread growth on a small board.
 
 shairport-sync reports the sender's timeline on the metadata pipe as `prgr`
 packets holding three RTP sample counts — `start`, `current` and `end` — at
-44 100 Hz. That timeline leads the audio you actually hear by the latency of the
+44 100 Hz. AirPlay 2 (shairport-sync 5.x) keeps this 44 100 Hz clock base for
+`prgr`; it is unrelated to the output sample rate negotiated with the DAC.
+That timeline leads the audio you actually hear by the latency of the
 whole output chain, so the reported position is corrected down:
 
 ```
